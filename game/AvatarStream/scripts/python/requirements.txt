@@ -3,6 +3,8 @@
 
 opencv-python
 mediapipe
+pytest
+pytest-mock
 
 # The following libraries are needed for the full implementation.
 # The exact package names and versions might vary.
