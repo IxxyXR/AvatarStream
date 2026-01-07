@@ -1,110 +1,69 @@
-# AvatarStream: Virtual Camera for macOS
+# AvatarStream
 
-AvatarStream is a macOS application that creates a virtual camera capable of streaming a 3D avatar whose movements are controlled in real-time by your own body movements. Your webcam footage is used to track your pose, which is then mirrored by the avatar. This virtual camera can be used as a video source in various other applications, such as video conferencing software (e.g., Zoom, Google Meet) or streaming software (e.g., OBS).
+This project implements a virtual avatar controlled by MediaPipe Holistic tracking. The Python script tracks body pose and sends the data to Godot, which renders the avatar. The rendered view is then sent back to a virtual camera device, allowing you to use the avatar in meetings (Zoom, Teams, etc.).
 
-## Features
+## Prerequisites
 
-*   **Virtual Camera Output**: Creates a system-level virtual camera on macOS that can be used in other applications.
-*   **Real-time Body Tracking**: Utilizes MediaPipe to perform real-time pose estimation from your webcam feed.
-*   **3D Avatar Animation**: Animates a 3D avatar in real-time based on the tracked body pose.
-*   **Customizable Avatars**: Supports the use of custom avatars (as long as they are compatible with Godot).
-*   **Adjustable Resolution**: Allows you to change the resolution of the virtual camera stream.
+### General
+*   **Python 3.8+**
+*   **Godot Engine 4.x** (Ensure `godot` is in your PATH, or specify the path when running)
 
-## How it Works
+### Python Dependencies
+Install the required packages:
+```bash
+pip install -r game/AvatarStream/scripts/python/requirements.txt
+```
 
-The project has a unique architecture that combines a Python script for body tracking with a Godot application for rendering the avatar and a C++ GDExtension for creating the virtual camera.
+### Virtual Camera Setup
 
-1.  **Pose Detection**: A Python script uses OpenCV to capture video from your webcam and MediaPipe to detect your body pose landmarks.
-2.  **UDP Communication**: The detected pose landmarks are sent from the Python script to the Godot application over a UDP socket.
-3.  **Avatar Animation**: The Godot application receives the landmark data and uses it to animate the bones of a 3D avatar model in real-time.
-4.  **Virtual Camera**: A GDExtension written in C++ uses the macOS CoreMediaIO framework to create a virtual camera device.
-5.  **Video Streaming**: The Godot application captures its viewport texture, which contains the rendered avatar, and sends it to the GDExtension. The GDExtension then pushes this image data as a video frame to the virtual camera, making it available to other applications.
+#### Windows
+1.  Install [OBS Studio](https://obsproject.com/).
+2.  OBS Studio comes with a Virtual Camera built-in. However, `pyvirtualcam` usually works with the Unity Capture driver or similar DirectShow filters.
+    *   **Recommended**: Install [OBS-VirtualCam](https://obsproject.com/forum/resources/obs-virtualcam.539/) if the built-in one isn't detected, or better yet, simply use `pyvirtualcam` which often defaults to OBS Virtual Camera if available.
+    *   Alternatively, `pyvirtualcam` on Windows often uses the `unity-capture` driver.
 
-## Dependencies
-
-To build and run AvatarStream, you will need the following dependencies:
-
-*   **Godot 4.x**: The Godot game engine is used for rendering the avatar and managing the application.
-*   **Python 3.x**: Required to run the body tracking script.
-*   **Python Libraries**:
-    *   `opencv-python`: For capturing webcam footage.
-    *   `mediapipe`: For pose estimation.
-*   **CMake**: Used to build the C++ GDExtension.
-*   **Xcode Command Line Tools**: Required for the C++ compiler and SDKs on macOS.
-
-## Building the GDExtension
-
-The C++ GDExtension that creates the virtual camera needs to be built before running the application.
-
-1.  **Clone the repository with submodules**:
+#### Linux
+1.  Install `v4l2loopback`:
     ```bash
-    git clone --recurse-submodules https://github.com/your-username/your-repository.git
-    cd your-repository
+    sudo apt install v4l2loopback-dkms
+    ```
+2.  Create a virtual device:
+    ```bash
+    sudo modprobe v4l2loopback devices=1 video_nr=20 card_label="AvatarStream" exclusive_caps=1
+    ```
+    (You might want to add this to `/etc/modules` or a startup script).
+
+#### macOS
+*   `pyvirtualcam` usually relies on OBS Virtual Camera on macOS as well. Ensure OBS is installed and the Virtual Camera is set up.
+
+## Running the Project
+
+Use the unified launcher script `run.py` at the root of the repository:
+
+```bash
+python run.py
+```
+
+This script will:
+1.  Check if dependencies are installed.
+2.  Start the Python tracking script in the background.
+3.  Launch the Godot project.
+4.  Clean up processes when you close Godot or press Ctrl+C.
+
+**Options:**
+*   `--godot-path <path>`: Specify the path to your Godot executable if it's not in your PATH.
+    ```bash
+    python run.py --godot-path /path/to/Godot_v4.x
     ```
 
-2.  **Create a build directory**:
-    ```bash
-    cd gdextension_cmio
-    mkdir build
-    cd build
-    ```
+## Development
 
-3.  **Run CMake and build the extension**:
-    ```bash
-    cmake ..
-    make
-    ```
+*   **Python Scripts**: Located in `game/AvatarStream/scripts/python/`.
+*   **Godot Project**: Located in `game/AvatarStream/`.
+*   **Communication**:
+    *   Python -> Godot: UDP Port 5005 (Pose Data, JSON)
+    *   Godot -> Python: UDP Port 5006 (Video Frames, MJPEG)
 
-    This will compile the GDExtension and place the necessary files in the correct directory for the Godot project to use.
+## Mobile Support
 
-## Running the Application
-
-1.  **Install Python dependencies**:
-    ```bash
-    pip install opencv-python mediapipe
-    ```
-
-2.  **Open the Godot project**:
-    *   Launch the Godot editor.
-    *   Click "Import" and select the `project.godot` file located in the `game/AvatarStream` directory.
-
-3.  **Run the project**:
-    *   Once the project is open in the Godot editor, click the "Play" button (or press F5) to run the application.
-
-## Usage
-
-When you run the application, you will be greeted with the main interface.
-
-*   **Start/Stop Virtual Camera**: Click the "Start Virtual Camera" button to activate the virtual camera. The button text will change to "Stop Virtual Camera".
-*   **Select Resolution**: Choose the desired output resolution from the dropdown menu.
-*   **Calibrate Avatar**: Click the "Calibrate" button to set the avatar to a T-pose, which can help in resetting its orientation.
-*   **Select Camera in Other Apps**: Once the virtual camera is running, open your desired third-party application (e.g., Zoom) and select "AvatarStream Cam" as your video source.
-
-## Support My Projects
-
-If you find this repository helpful and would like to support its development, consider making a donation:
-
-### GitHub Sponsors
-[![Sponsor](https://img.shields.io/badge/Sponsor-%23EA4AAA?style=for-the-badge&logo=github)](https://github.com/sponsors/toxicoder)
-
-### Buy Me a Coffee
-<a href="https://www.buymeacoffee.com/toxicoder" target="_blank">
-    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="41" width="174">
-</a>
-
-### PayPal
-[![PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/donate/?hosted_button_id=LSHNL8YLSU3W6)
-
-### Ko-fi
-<a href="https://ko-fi.com/toxicoder" target="_blank">
-    <img src="https://storage.ko-fi.com/cdn/kofi3.png" alt="Ko-fi" height="41" width="174">
-</a>
-
-### Coinbase
-[![Donate via Coinbase](https://img.shields.io/badge/Donate%20via-Coinbase-0052FF?style=for-the-badge&logo=coinbase&logoColor=white)](https://commerce.coinbase.com/checkout/e07dc140-d9f7-4818-b999-fdb4f894bab7)
-
-Your support helps maintain and improve this collection of development tools and templates. Thank you for contributing to open source!
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+If you export this project to Android or iOS, the Virtual Camera streaming feature is automatically disabled, and it functions as a standalone "Magic Mirror" application.
