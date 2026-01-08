@@ -54,8 +54,12 @@ func send_frame():
     # Resize to something reasonable for streaming
     image.resize(640, 360)
 
-    # Convert to JPG
-    var buffer = image.save_jpg_to_buffer(0.75)
+    # Convert to RGB8 if needed (pyvirtualcam expects RGB)
+    if image.get_format() != Image.FORMAT_RGB8:
+        image.convert(Image.FORMAT_RGB8)
+
+    # Get raw data (much faster than JPG encoding)
+    var buffer = image.get_data()
 
     if buffer.size() > 0:
         # Send size first (4 bytes), then data
