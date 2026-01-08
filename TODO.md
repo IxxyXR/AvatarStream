@@ -29,3 +29,13 @@
 - [x] Documentation:
     - [x] Update `README.md` with `run.py` instructions
     - [x] Add setup notes for Windows (OBS) and Linux (v4l2loopback)
+
+## Phase 4: Optimization & UX (Current)
+- [x] **Performance**:
+    - [x] Switch Pose Data from JSON to Binary (UDP) in `holistic_tracker.py` and `MediaPipeBridge.gd` (~80% size reduction)
+    - [x] Switch Video Stream from MJPEG to Raw RGB (TCP) in `VirtualCameraSender.gd` and `holistic_tracker.py` (Eliminate encode/decode CPU cost)
+- [x] **Setup & UX**:
+    - [x] Auto-install Python dependencies in `run.py` if missing
+    - [x] Fix double-launch bug: Godot no longer launches Python if `run.py` already did (via `AVATARSTREAM_LAUNCHED_BY_RUNNER` env var)
+- [x] **Quality**:
+    - [x] Add protocol unit tests (`game/AvatarStream/scripts/python/tests/test_protocol.py`)

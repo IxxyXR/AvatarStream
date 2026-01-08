@@ -20,8 +20,15 @@ def check_dependencies():
         return True
     except ImportError as e:
         print(f"Missing dependency: {e.name}")
-        print("Please run: pip install -r game/AvatarStream/scripts/python/requirements.txt")
-        return False
+        print("Attempting to install dependencies...")
+        try:
+            requirements_path = os.path.join("game", "AvatarStream", "scripts", "python", "requirements.txt")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", requirements_path])
+            print("Dependencies installed successfully.")
+            return True
+        except subprocess.CalledProcessError:
+            print(f"Failed to install dependencies. Please manually run: pip install -r {requirements_path}")
+            return False
 
 def run_python_tracker(python_script_path):
     print(f"Starting Python tracker: {python_script_path}")
@@ -68,8 +75,13 @@ def main():
     # Launch Godot
     # We wait for Godot to exit, then we kill the tracker.
     godot_process = None
+
+    # Set environment variable to tell Godot it's launched by the runner
+    env = os.environ.copy()
+    env["AVATARSTREAM_LAUNCHED_BY_RUNNER"] = "1"
+
     try:
-        godot_process = subprocess.Popen([args.godot_path, "--path", project_path])
+        godot_process = subprocess.Popen([args.godot_path, "--path", project_path], env=env)
         godot_process.wait()
     except FileNotFoundError:
         print(f"Error: Godot executable not found at '{args.godot_path}'. Please provide the correct path using --godot-path.")

@@ -4,6 +4,7 @@ import socket
 import json
 import time
 import threading
+import struct
 import numpy as np
 
 # UDP settings
@@ -72,15 +73,51 @@ def virtual_camera_loop():
                         if len(img_data) != size:
                             break
 
-                        # Decode image
-                        nparr = np.frombuffer(img_data, np.uint8)
-                        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                        # Parse Raw Image Data (RGB)
+                        # Assumed resolution 640x360.
+                        # In a more robust implementation, width/height should be part of the protocol.
+                        # For now we rely on the buffer size to infer or hardcode if needed.
+                        # 640*360*3 = 691200
 
-                        if frame is None:
+                        # If size matches 640x360x3, we just reshape.
+                        # If it's a JPG (legacy), we detect header?
+                        # Let's assume the client sends raw RGB.
+
+                        try:
+                            frame = np.frombuffer(img_data, dtype=np.uint8)
+
+                            # Heuristic to detect if it's still JPG (starts with 0xFFD8)
+                            if len(frame) > 2 and frame[0] == 0xFF and frame[1] == 0xD8:
+                                frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
+                                if frame is not None:
+                                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                            else:
+                                # Assume 640x360 RGB
+                                # If the size is different, we might fail reshaping.
+                                # Let's calculate based on aspect ratio 16:9?
+                                # W * H * 3 = Size. W * (9/16 W) * 3 = Size => W^2 = Size / 3 * 16 / 9
+                                # For now, hardcode 640x360 as target
+                                target_w, target_h = 640, 360
+                                if size == target_w * target_h * 3:
+                                    frame = frame.reshape((target_h, target_w, 3))
+                                else:
+                                    # Try to guess
+                                    # If not 640x360, maybe square?
+                                    side = int(np.sqrt(size / 3))
+                                    if side * side * 3 == size:
+                                         frame = frame.reshape((side, side, 3))
+                                    else:
+                                         # Fallback or error
+                                         continue
+
+                            if frame is None:
+                                continue
+
+                            h, w, c = frame.shape
+
+                        except Exception as e:
+                            print(f"Frame decode error: {e}")
                             continue
-
-                        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                        h, w, c = frame.shape
 
                         if cam is None:
                             cam = pyvirtualcam.Camera(width=w, height=h, fps=30)
@@ -129,19 +166,18 @@ def main():
             image.flags.setflags(write=False)
             results = holistic.process(image)
 
-            landmarks_data = []
             if results.pose_landmarks:
+                # Pack data into binary format: 33 landmarks * 4 floats (x,y,z,vis)
+                # 33 * 4 = 132 floats
+                flattened = []
                 for landmark in results.pose_landmarks.landmark:
-                    landmarks_data.append({
-                        'x': landmark.x,
-                        'y': landmark.y,
-                        'z': landmark.z,
-                        'visibility': landmark.visibility,
-                    })
+                    flattened.extend([landmark.x, landmark.y, landmark.z, landmark.visibility])
 
-            if landmarks_data:
-                message = json.dumps({"pose_landmarks": landmarks_data}).encode('utf-8')
-                sock.sendto(message, (UDP_IP, UDP_PORT))
+                # 'f' is 4-byte float. 132 of them.
+                # struct.pack expects args, so we use *flattened
+                if len(flattened) == 33 * 4:
+                    message = struct.pack(f'{len(flattened)}f', *flattened)
+                    sock.sendto(message, (UDP_IP, UDP_PORT))
 
             # A small delay to prevent overwhelming the network and CPU
             time.sleep(0.01)

@@ -20,33 +20,52 @@ func _ready():
 	# For macOS and Linux, it could be 'python' or 'python3'.
 	var python_executable = "python"
 
-	python_pid = OS.execute(python_executable, args, false) # non-blocking
-
-	if python_pid == 0 or python_pid == -1: # 0 or -1 indicates failure
-		print("Error starting python script with 'python'. Trying 'python3'.")
-		python_executable = "python3"
+	if OS.get_environment("AVATARSTREAM_LAUNCHED_BY_RUNNER") == "1":
+		print("Launched by run.py, skipping Python tracker auto-start.")
+	else:
 		python_pid = OS.execute(python_executable, args, false) # non-blocking
-		if python_pid == 0 or python_pid == -1:
-			 print("Error starting python script with 'python3' as well. Please check your python installation and PATH.")
+
+		if python_pid == 0 or python_pid == -1: # 0 or -1 indicates failure
+			print("Error starting python script with 'python'. Trying 'python3'.")
+			python_executable = "python3"
+			python_pid = OS.execute(python_executable, args, false) # non-blocking
+			if python_pid == 0 or python_pid == -1:
+				 print("Error starting python script with 'python3' as well. Please check your python installation and PATH.")
+			else:
+				print("Python script started with PID: ", python_pid)
 		else:
 			print("Python script started with PID: ", python_pid)
-	else:
-		print("Python script started with PID: ", python_pid)
 
 
 func _process(_delta):
-	if udp.get_available_packet_count() > 0:
+	while udp.get_available_packet_count() > 0:
 		var packet = udp.get_packet()
-		var data_string = packet.get_string_from_utf8()
+		# Expecting binary data: 33 landmarks * 4 floats * 4 bytes/float = 528 bytes
+		# Format: x, y, z, visibility (all float32)
+		if packet.size() % 16 == 0:
+			var count = packet.size() / 16
+			pose_landmarks = []
+			var spb = StreamPeerBuffer.new()
+			spb.data_array = packet
 
-		var json = JSON.new()
-		var error = json.parse(data_string)
-		if error == OK:
-			var data = json.get_data()
-			if data.has("pose_landmarks"):
-				pose_landmarks = data["pose_landmarks"]
+			for i in range(count):
+				var lm = {}
+				lm['x'] = spb.get_float()
+				lm['y'] = spb.get_float()
+				lm['z'] = spb.get_float()
+				lm['visibility'] = spb.get_float()
+				pose_landmarks.append(lm)
 		else:
-			print("JSON Parse Error: ", json.get_error_message(), " in ", data_string)
+			# Fallback to JSON for compatibility or logging
+			var data_string = packet.get_string_from_utf8()
+			var json = JSON.new()
+			var error = json.parse(data_string)
+			if error == OK:
+				var data = json.get_data()
+				if data.has("pose_landmarks"):
+					pose_landmarks = data["pose_landmarks"]
+			else:
+				print("Packet Error: Invalid binary size and JSON parse failed.")
 
 func get_pose_landmarks():
 	return pose_landmarks
