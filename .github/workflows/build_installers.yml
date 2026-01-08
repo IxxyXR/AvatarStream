@@ -1,0 +1,136 @@
+name: Build Installers
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            godot_executable: godot
+            godot_export_preset: "Linux/X11"
+            artifact_name: AvatarStream-Linux
+            python_binary_name: holistic_tracker
+            launcher_name: run
+            zip_name: AvatarStream-Linux.zip
+            export_output: AvatarStream.x86_64
+          - os: windows-latest
+            godot_executable: godot.exe
+            godot_export_preset: "Windows Desktop"
+            artifact_name: AvatarStream-Windows
+            python_binary_name: holistic_tracker.exe
+            launcher_name: run.exe
+            zip_name: AvatarStream-Windows.zip
+            export_output: AvatarStream.exe
+          - os: macos-latest
+            godot_executable: godot
+            godot_export_preset: "macOS"
+            artifact_name: AvatarStream-macOS
+            python_binary_name: holistic_tracker
+            launcher_name: run
+            zip_name: AvatarStream-macOS.zip
+            export_output: AvatarStream.zip
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v1
+        with:
+          version: 4.3.0
+          use-dotnet: false
+
+      - name: Install Dependencies
+        run: |
+          pip install -r game/AvatarStream/scripts/python/requirements.txt
+          pip install pyinstaller
+
+      - name: Build Python Tracker
+        run: |
+          pyinstaller --onefile --distpath dist --workpath build/pyinstaller --specpath build/pyinstaller game/AvatarStream/scripts/python/holistic_tracker.py
+
+      - name: Build Launcher
+        run: |
+          pyinstaller --onefile --distpath dist --workpath build/pyinstaller --specpath build/pyinstaller run.py
+
+      - name: Download Godot Export Templates
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates/4.3.stable
+          curl -L https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz -o export_templates.tpz
+          unzip -q export_templates.tpz -d temp_templates
+          mv temp_templates/templates/* ~/.local/share/godot/export_templates/4.3.stable/
+          rm -rf temp_templates export_templates.tpz
+        if: runner.os != 'Windows'
+
+      - name: Download Godot Export Templates (Windows)
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:APPDATA\Godot\export_templates\4.3.stable"
+          Invoke-WebRequest -Uri https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz -OutFile export_templates.tpz
+          Expand-Archive export_templates.tpz -DestinationPath temp_templates
+          Move-Item -Path "temp_templates\templates\*" -Destination "$env:APPDATA\Godot\export_templates\4.3.stable" -Force
+          Remove-Item -Recurse -Force temp_templates
+          Remove-Item export_templates.tpz
+        if: runner.os == 'Windows'
+
+      - name: Create Build Directory
+        run: mkdir -p build/${{ matrix.artifact_name }}
+
+      - name: Export Godot Project
+        run: |
+          godot --headless --path game/AvatarStream --export-release "${{ matrix.godot_export_preset }}" ../../build/${{ matrix.artifact_name }}/${{ matrix.export_output }}
+        if: runner.os != 'Windows'
+
+      - name: Export Godot Project (Windows)
+        run: |
+          godot --headless --path game/AvatarStream --export-release "${{ matrix.godot_export_preset }}" ../../build/${{ matrix.artifact_name }}/${{ matrix.export_output }}
+        if: runner.os == 'Windows'
+
+      - name: Organize Files (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cp dist/${{ matrix.python_binary_name }} build/${{ matrix.artifact_name }}/
+          cp dist/${{ matrix.launcher_name }} build/${{ matrix.artifact_name }}/
+          chmod +x build/${{ matrix.artifact_name }}/${{ matrix.launcher_name }}
+          chmod +x build/${{ matrix.artifact_name }}/${{ matrix.python_binary_name }}
+          chmod +x build/${{ matrix.artifact_name }}/${{ matrix.export_output }}
+
+      - name: Organize Files (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cp dist/${{ matrix.python_binary_name }} build/${{ matrix.artifact_name }}/
+          cp dist/${{ matrix.launcher_name }} build/${{ matrix.artifact_name }}/
+
+          # Unzip the Godot export
+          unzip -q "build/${{ matrix.artifact_name }}/${{ matrix.export_output }}" -d "build/${{ matrix.artifact_name }}/"
+          rm "build/${{ matrix.artifact_name }}/${{ matrix.export_output }}"
+
+          # Ensure executable permissions
+          chmod +x build/${{ matrix.artifact_name }}/${{ matrix.launcher_name }}
+          chmod +x build/${{ matrix.artifact_name }}/${{ matrix.python_binary_name }}
+
+      - name: Organize Files (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          Copy-Item "dist\${{ matrix.python_binary_name }}" "build\${{ matrix.artifact_name }}\"
+          Copy-Item "dist\${{ matrix.launcher_name }}" "build\${{ matrix.artifact_name }}\"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: build/${{ matrix.artifact_name }}
