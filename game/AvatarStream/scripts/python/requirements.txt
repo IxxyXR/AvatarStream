@@ -6,6 +6,7 @@ mediapipe
 pyvirtualcam
 pytest
 pytest-mock
+pyinstaller
 
 # The following libraries are needed for the full implementation.
 # The exact package names and versions might vary.

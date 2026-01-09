@@ -3,6 +3,7 @@ import socket
 import struct
 import threading
 import time
+import os
 import numpy as np
 
 # Mock implementation of the binary protocol
