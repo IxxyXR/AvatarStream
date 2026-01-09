@@ -90,6 +90,10 @@ jobs:
       - name: Create Build Directory
         run: mkdir -p build/${{ matrix.artifact_name }}
 
+      - name: Import Godot Assets
+        run: |
+          godot --headless --path game/AvatarStream --editor --quit
+
       - name: Export Godot Project
         run: |
           godot --headless --path game/AvatarStream --export-release "${{ matrix.godot_export_preset }}" ../../build/${{ matrix.artifact_name }}/${{ matrix.export_output }}
