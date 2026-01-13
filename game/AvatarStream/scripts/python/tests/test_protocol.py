@@ -51,14 +51,17 @@ class TestBinaryProtocol(unittest.TestCase):
         def server_thread_func():
             conn, addr = server_sock.accept()
             with conn:
-                # Read size
-                size_data = b''
-                while len(size_data) < 4:
-                    packet = conn.recv(4 - len(size_data))
+                # Read width and height
+                header_data = b''
+                while len(header_data) < 8:
+                    packet = conn.recv(8 - len(header_data))
                     if not packet: break
-                    size_data += packet
+                    header_data += packet
 
-                size = int.from_bytes(size_data, byteorder='little')
+                width = int.from_bytes(header_data[0:4], byteorder='little')
+                height = int.from_bytes(header_data[4:8], byteorder='little')
+
+                size = width * height * 3
 
                 # Read data
                 data = b''
@@ -69,7 +72,7 @@ class TestBinaryProtocol(unittest.TestCase):
 
                 # Verify data
                 expected_size = 640 * 360 * 3
-                if size == expected_size:
+                if size == expected_size and width == 640 and height == 360:
                      frame = np.frombuffer(data, dtype=np.uint8)
                      if len(frame) == expected_size:
                          return True
@@ -87,7 +90,8 @@ class TestBinaryProtocol(unittest.TestCase):
         w, h = 640, 360
         frame_data = bytearray(os.urandom(w * h * 3))
 
-        client.sendall(struct.pack('<I', len(frame_data)))
+        # Protocol: Width (4), Height (4), Data
+        client.sendall(struct.pack('<II', w, h))
         client.sendall(frame_data)
 
         client.close()

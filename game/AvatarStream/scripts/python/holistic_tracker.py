@@ -43,24 +43,21 @@ def virtual_camera_loop():
 
                 with conn:
                     while True:
-                        # Read size (4 bytes)
-                        size_data = b''
-                        while len(size_data) < 4:
-                            packet = conn.recv(4 - len(size_data))
+                        # Read width (4 bytes) and height (4 bytes)
+                        header_data = b''
+                        while len(header_data) < 8:
+                            packet = conn.recv(8 - len(header_data))
                             if not packet:
                                 break
-                            size_data += packet
+                            header_data += packet
 
-                        if not size_data:
+                        if not header_data:
                             break
 
-                        size = int.from_bytes(size_data, byteorder='little') # Godot uses little endian usually? Or big?
-                        # Godot StreamPeerTCP put_32 is likely little endian on intel. But network byte order is usually big.
-                        # Godot documentation says put_32 puts a 32-bit integer.
-                        # Let's assume little endian for now, or check documentation.
-                        # Actually StreamPeer uses big-endian by default?
-                        # StreamPeer.big_endian property defaults to false.
-                        # So it is little endian.
+                        width = int.from_bytes(header_data[0:4], byteorder='little')
+                        height = int.from_bytes(header_data[4:8], byteorder='little')
+
+                        size = width * height * 3
 
                         # Read image data
                         img_data = b''
@@ -73,51 +70,21 @@ def virtual_camera_loop():
                         if len(img_data) != size:
                             break
 
-                        # Parse Raw Image Data (RGB)
-                        # Assumed resolution 640x360.
-                        # In a more robust implementation, width/height should be part of the protocol.
-                        # For now we rely on the buffer size to infer or hardcode if needed.
-                        # 640*360*3 = 691200
-
-                        # If size matches 640x360x3, we just reshape.
-                        # If it's a JPG (legacy), we detect header?
-                        # Let's assume the client sends raw RGB.
-
                         try:
                             frame = np.frombuffer(img_data, dtype=np.uint8)
-
-                            # Heuristic to detect if it's still JPG (starts with 0xFFD8)
-                            if len(frame) > 2 and frame[0] == 0xFF and frame[1] == 0xD8:
-                                frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
-                                if frame is not None:
-                                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                            else:
-                                # Assume 640x360 RGB
-                                # If the size is different, we might fail reshaping.
-                                # Let's calculate based on aspect ratio 16:9?
-                                # W * H * 3 = Size. W * (9/16 W) * 3 = Size => W^2 = Size / 3 * 16 / 9
-                                # For now, hardcode 640x360 as target
-                                target_w, target_h = 640, 360
-                                if size == target_w * target_h * 3:
-                                    frame = frame.reshape((target_h, target_w, 3))
-                                else:
-                                    # Try to guess
-                                    # If not 640x360, maybe square?
-                                    side = int(np.sqrt(size / 3))
-                                    if side * side * 3 == size:
-                                         frame = frame.reshape((side, side, 3))
-                                    else:
-                                         # Fallback or error
-                                         continue
-
-                            if frame is None:
-                                continue
+                            frame = frame.reshape((height, width, 3))
 
                             h, w, c = frame.shape
 
                         except Exception as e:
                             print(f"Frame decode error: {e}")
                             continue
+
+                        # Update camera if resolution changed
+                        if cam is not None and (cam.width != w or cam.height != h):
+                            print(f"Resolution changed from {cam.width}x{cam.height} to {w}x{h}. Restarting Virtual Camera.")
+                            cam.close()
+                            cam = None
 
                         if cam is None:
                             cam = pyvirtualcam.Camera(width=w, height=h, fps=30)

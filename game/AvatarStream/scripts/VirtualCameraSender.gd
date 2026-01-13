@@ -8,6 +8,9 @@ var frame_rate := 30.0
 var time_since_last_frame := 0.0
 var connected := false
 
+var target_width := 640
+var target_height := 360
+
 func _ready():
     # Only enable on desktop platforms
     if not (OS.get_name() in ["Windows", "macOS", "Linux", "FreeBSD", "NetBSD", "OpenBSD", "BSD"]):
@@ -25,6 +28,11 @@ func connect_to_server():
     else:
         print("Failed to connect to Virtual Camera Server.")
         connected = false
+
+func set_resolution(width: int, height: int):
+    target_width = width
+    target_height = height
+    print("Virtual Camera resolution set to: " + str(width) + "x" + str(height))
 
 func _process(delta):
     # Check connection status
@@ -52,7 +60,7 @@ func send_frame():
 
     var image = viewport.get_texture().get_image()
     # Resize to something reasonable for streaming
-    image.resize(640, 360)
+    image.resize(target_width, target_height)
 
     # Convert to RGB8 if needed (pyvirtualcam expects RGB)
     if image.get_format() != Image.FORMAT_RGB8:
@@ -62,6 +70,7 @@ func send_frame():
     var buffer = image.get_data()
 
     if buffer.size() > 0:
-        # Send size first (4 bytes), then data
-        tcp_client.put_32(buffer.size())
+        # Send width (4 bytes), height (4 bytes), then data
+        tcp_client.put_32(target_width)
+        tcp_client.put_32(target_height)
         tcp_client.put_data(buffer)
