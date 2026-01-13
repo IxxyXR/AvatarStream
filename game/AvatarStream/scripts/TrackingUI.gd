@@ -60,9 +60,10 @@ func _on_ResolutionOptionButton_item_selected(index):
 	var width = int(resolution[0])
 	var height = int(resolution[1])
 	# godot_cmio.set_resolution(width, height)
-	# TODO: Inform VirtualCameraSender about resolution change?
-	# For now, it resizes to 640x360 fixed.
-	pass
+
+	var sender = get_tree().get_root().find_child("VirtualCameraSender", true, false)
+	if sender:
+		sender.set_resolution(width, height)
 
 var control_hints = {
 	"VirtualCamButton": "Starts or stops the virtual camera.",
