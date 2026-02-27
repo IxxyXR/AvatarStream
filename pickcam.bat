@@ -11,4 +11,4 @@ if not exist ".venv\Scripts\python.exe" (
 
 set "LOG_FILE=logs\holistic_tracker.log"
 echo Logging to %LOG_FILE%
-call ".venv\Scripts\python.exe" "game\AvatarStream\scripts\python\holistic_tracker.py" --pick-camera --debug --no-virtual-cam --listen-http --listen-host 127.0.0.1 --listen-port 40074 --listen-path /pose --transport none --log-file "%LOG_FILE%"
+call ".venv\Scripts\python.exe" "game\AvatarStream\scripts\python\holistic_tracker.py" --pick-camera --debug --no-virtual-cam --listen-http --listen-host 127.0.0.1 --listen-port 40094 --listen-path /pose --transport none --log-file "%LOG_FILE%"

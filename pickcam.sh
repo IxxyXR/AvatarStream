@@ -19,7 +19,7 @@ exec .venv/bin/python game/AvatarStream/scripts/python/holistic_tracker.py \
   --no-virtual-cam \
   --listen-http \
   --listen-host 127.0.0.1 \
-  --listen-port 40074 \
+  --listen-port 40094 \
   --listen-path /pose \
   --transport none \
   --log-file "${LOG_FILE}"

@@ -18,7 +18,7 @@ UDP_IP = "127.0.0.1"
 UDP_PORT = 5005
 VIRTUAL_CAM_PORT = 5006
 DEFAULT_LOG_FILE = os.path.join("logs", "holistic_tracker.log")
-DEFAULT_HTTP_URL = "http://127.0.0.1:40074/pose"
+DEFAULT_HTTP_URL = "http://127.0.0.1:40094/pose"
 DEFAULT_VIEWER_FILE = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "web", "pose_viewer.html")
 )
@@ -221,7 +221,7 @@ def build_parser():
     parser.add_argument("--http-timeout", type=float, default=0.2, help="HTTP timeout in seconds")
     parser.add_argument("--listen-http", action="store_true", help="Run local HTTP listener that serves latest pose JSON")
     parser.add_argument("--listen-host", default="127.0.0.1", help="Listener host for local HTTP server")
-    parser.add_argument("--listen-port", type=int, default=40074, help="Listener port for local HTTP server")
+    parser.add_argument("--listen-port", type=int, default=40094, help="Listener port for local HTTP server")
     parser.add_argument("--listen-path", default="/pose", help="Listener endpoint path for pose JSON")
     return parser
 

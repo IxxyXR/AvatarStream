@@ -77,11 +77,11 @@ To run tracking with camera selection and local HTTP JSON output:
   pickcam_mac.command
   ```
 
-This starts the local listener at `127.0.0.1:40074` with:
+This starts the local listener at `127.0.0.1:40094` with:
 
-* Pose endpoint: `http://127.0.0.1:40074/pose`
-* Health endpoint: `http://127.0.0.1:40074/health`
-* Built-in viewer: `http://127.0.0.1:40074/viewer`
+* Pose endpoint: `http://127.0.0.1:40094/pose`
+* Health endpoint: `http://127.0.0.1:40094/health`
+* Built-in viewer: `http://127.0.0.1:40094/viewer`
 
 Listener logs are written to:
 

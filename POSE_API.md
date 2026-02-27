@@ -4,8 +4,8 @@ This document defines the JSON returned by the local tracker listener.
 
 ## Endpoint
 
-- `GET http://127.0.0.1:40074/pose`
-- Health check: `GET http://127.0.0.1:40074/health`
+- `GET http://127.0.0.1:40094/pose`
+- Health check: `GET http://127.0.0.1:40094/health`
 
 ## Success Response (`/pose`)
 
