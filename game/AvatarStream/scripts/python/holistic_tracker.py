@@ -347,8 +347,18 @@ def build_pose_payload(results):
 
     return {
         "timestamp_ms": int(time.time() * 1000),
+        "has_pose": True,
         "landmarks": named_landmarks,
         "segments": segments,
+    }
+
+
+def build_no_pose_payload():
+    return {
+        "timestamp_ms": int(time.time() * 1000),
+        "has_pose": False,
+        "landmarks": {},
+        "segments": {},
     }
 
 
@@ -553,6 +563,8 @@ def main():
                         )
                         frames = 0
                         last_debug_time = now
+            else:
+                pose_state.set_payload(build_no_pose_payload())
 
             # A small delay to prevent overwhelming the network and CPU
             time.sleep(0.01)

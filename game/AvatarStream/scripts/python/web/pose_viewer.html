@@ -87,6 +87,11 @@
       <div>Packets: <code id="packets">0</code></div>
       <div>FPS: <code id="fps">0.0</code></div>
       <div>Last update: <code id="updated">-</code></div>
+      <div>Points: <code id="points">0/0</code></div>
+      <div>Segments: <code id="segments">0</code></div>
+      <div>Pose: <code id="poseState">unknown</code></div>
+      <div>HTTP: <code id="httpState">idle</code></div>
+      <div>Age ms: <code id="ageMs">-</code></div>
     </div>
   </div>
 
@@ -100,6 +105,11 @@
     const packetsEl = document.getElementById("packets");
     const fpsEl = document.getElementById("fps");
     const updatedEl = document.getElementById("updated");
+    const pointsEl = document.getElementById("points");
+    const segmentsEl = document.getElementById("segments");
+    const poseStateEl = document.getElementById("poseState");
+    const httpStateEl = document.getElementById("httpState");
+    const ageMsEl = document.getElementById("ageMs");
 
     const bones = [
       ["left_shoulder", "right_shoulder"],
@@ -164,15 +174,46 @@
         const res = await fetch(endpoint, { cache: "no-store" });
         if (!res.ok) {
           setStatus(`HTTP ${res.status}`, "warn");
+          httpStateEl.textContent = `${res.status}`;
           return;
         }
+        httpStateEl.textContent = "200";
         const json = await res.json();
         if (!json.ok || !json.pose || !json.pose.landmarks) {
           setStatus("No pose yet", "warn");
+          poseStateEl.textContent = "no-data";
           return;
         }
 
-        drawPose(json.pose.landmarks);
+        const landmarks = json.pose.landmarks || {};
+        const landmarkKeys = Object.keys(landmarks);
+        let visibleCount = 0;
+        for (const key of landmarkKeys) {
+          const lm = landmarks[key];
+          if ((lm.visibility ?? 0) >= 0.3) visibleCount += 1;
+        }
+        const segments = json.pose.segments || {};
+        pointsEl.textContent = `${visibleCount}/${landmarkKeys.length}`;
+        segmentsEl.textContent = String(Object.keys(segments).length);
+
+        const nowEpoch = Date.now();
+        if (json.updated_ms) {
+          const age = Math.max(0, nowEpoch - json.updated_ms);
+          ageMsEl.textContent = String(age);
+        } else {
+          ageMsEl.textContent = "-";
+        }
+
+        if (json.pose.has_pose === false) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          updatedEl.textContent = json.updated_ms ? new Date(json.updated_ms).toLocaleTimeString() : "-";
+          poseStateEl.textContent = "no-pose";
+          setStatus("No pose detected", "warn");
+          return;
+        }
+
+        drawPose(landmarks);
+        poseStateEl.textContent = "tracked";
         packetCount += 1;
         packetsEl.textContent = String(packetCount);
 
@@ -187,6 +228,7 @@
         setStatus("Live", "ok");
       } catch (err) {
         setStatus("Fetch failed", "warn");
+        httpStateEl.textContent = "error";
       }
     }
 
