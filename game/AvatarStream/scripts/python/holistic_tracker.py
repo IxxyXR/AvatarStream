@@ -383,6 +383,13 @@ def start_pose_http_listener(args, pose_state):
     listen_path = args.listen_path if args.listen_path.startswith("/") else f"/{args.listen_path}"
 
     class PoseHandler(BaseHTTPRequestHandler):
+        def do_OPTIONS(self):
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.end_headers()
+
         def do_GET(self):
             parsed = urllib.parse.urlsplit(self.path)
             if parsed.path == "/health":
@@ -414,6 +421,7 @@ def start_pose_http_listener(args, pose_state):
             blob = json.dumps(body, separators=(",", ":")).encode("utf-8")
             self.send_response(status_code)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Content-Length", str(len(blob)))
             self.end_headers()
             self.wfile.write(blob)

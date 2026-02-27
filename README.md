@@ -60,6 +60,7 @@ This script will:
 
 *   **Python Scripts**: Located in `game/AvatarStream/scripts/python/`.
 *   **Godot Project**: Located in `game/AvatarStream/`.
+*   **Pose API Contract**: See [POSE_API.md](POSE_API.md) for the local HTTP listener JSON schema.
 *   **Communication**:
     *   Python -> Godot: UDP Port 5005 (Pose Data, JSON)
     *   Godot -> Python: UDP Port 5006 (Video Frames, MJPEG)

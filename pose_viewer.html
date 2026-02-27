@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AvatarStream Pose Viewer</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --ink: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #22c55e;
+      --warn: #f59e0b;
+      --line: #93c5fd;
+      --joint: #f8fafc;
+    }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 10% 10%, #1e293b 0%, var(--bg) 45%);
+      color: var(--ink);
+      font-family: Segoe UI, Tahoma, sans-serif;
+    }
+    .wrap {
+      max-width: 980px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      background: rgba(17, 24, 39, 0.9);
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    input, button {
+      font: inherit;
+      color: var(--ink);
+      background: #0b1220;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    button {
+      cursor: pointer;
+      background: #14532d;
+      border-color: #166534;
+    }
+    .status { color: var(--muted); }
+    .status.ok { color: var(--accent); }
+    .status.warn { color: var(--warn); }
+    canvas {
+      width: 100%;
+      height: auto;
+      background: rgba(15, 23, 42, 0.86);
+      border: 1px solid #334155;
+      border-radius: 12px;
+      display: block;
+    }
+    .stats {
+      display: flex;
+      gap: 20px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    code { color: #bae6fd; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>AvatarStream Pose Viewer</h1>
+    <div class="row">
+      <label for="endpoint">Endpoint</label>
+      <input id="endpoint" size="42" value="http://127.0.0.1:40074/pose">
+      <label for="intervalMs">Poll ms</label>
+      <input id="intervalMs" type="number" min="50" step="10" value="100">
+      <button id="toggleBtn">Start</button>
+      <span id="status" class="status">Idle</span>
+    </div>
+    <canvas id="poseCanvas" width="960" height="540"></canvas>
+    <div class="stats">
+      <div>Packets: <code id="packets">0</code></div>
+      <div>FPS: <code id="fps">0.0</code></div>
+      <div>Last update: <code id="updated">-</code></div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("poseCanvas");
+    const ctx = canvas.getContext("2d");
+    const endpointInput = document.getElementById("endpoint");
+    const intervalInput = document.getElementById("intervalMs");
+    const toggleBtn = document.getElementById("toggleBtn");
+    const statusEl = document.getElementById("status");
+    const packetsEl = document.getElementById("packets");
+    const fpsEl = document.getElementById("fps");
+    const updatedEl = document.getElementById("updated");
+
+    const bones = [
+      ["left_shoulder", "right_shoulder"],
+      ["left_hip", "right_hip"],
+      ["left_shoulder", "left_elbow"],
+      ["left_elbow", "left_wrist"],
+      ["right_shoulder", "right_elbow"],
+      ["right_elbow", "right_wrist"],
+      ["left_shoulder", "left_hip"],
+      ["right_shoulder", "right_hip"],
+      ["left_hip", "left_knee"],
+      ["left_knee", "left_ankle"],
+      ["right_hip", "right_knee"],
+      ["right_knee", "right_ankle"]
+    ];
+
+    let timerId = null;
+    let packetCount = 0;
+    let lastFrameTime = performance.now();
+    let fps = 0;
+
+    function setStatus(text, cls = "") {
+      statusEl.textContent = text;
+      statusEl.className = "status " + cls;
+    }
+
+    function toCanvasPoint(lm) {
+      return { x: lm.x * canvas.width, y: lm.y * canvas.height, v: lm.visibility ?? 1 };
+    }
+
+    function drawPose(landmarks) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--line").trim();
+      ctx.lineWidth = 4;
+      for (const [a, b] of bones) {
+        const la = landmarks[a];
+        const lb = landmarks[b];
+        if (!la || !lb) continue;
+        const pa = toCanvasPoint(la);
+        const pb = toCanvasPoint(lb);
+        if (pa.v < 0.3 || pb.v < 0.3) continue;
+        ctx.beginPath();
+        ctx.moveTo(pa.x, pa.y);
+        ctx.lineTo(pb.x, pb.y);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--joint").trim();
+      for (const key of Object.keys(landmarks)) {
+        const p = toCanvasPoint(landmarks[key]);
+        if (p.v < 0.3) continue;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    async function pollOnce() {
+      const endpoint = endpointInput.value.trim();
+      try {
+        const res = await fetch(endpoint, { cache: "no-store" });
+        if (!res.ok) {
+          setStatus(`HTTP ${res.status}`, "warn");
+          return;
+        }
+        const json = await res.json();
+        if (!json.ok || !json.pose || !json.pose.landmarks) {
+          setStatus("No pose yet", "warn");
+          return;
+        }
+
+        drawPose(json.pose.landmarks);
+        packetCount += 1;
+        packetsEl.textContent = String(packetCount);
+
+        const now = performance.now();
+        const dt = Math.max(1, now - lastFrameTime);
+        const instant = 1000 / dt;
+        fps = fps === 0 ? instant : (fps * 0.85 + instant * 0.15);
+        fpsEl.textContent = fps.toFixed(1);
+        lastFrameTime = now;
+
+        updatedEl.textContent = json.updated_ms ? new Date(json.updated_ms).toLocaleTimeString() : "-";
+        setStatus("Live", "ok");
+      } catch (err) {
+        setStatus("Fetch failed", "warn");
+      }
+    }
+
+    function startPolling() {
+      if (timerId) return;
+      const interval = Math.max(50, Number(intervalInput.value) || 100);
+      setStatus("Connecting...");
+      pollOnce();
+      timerId = setInterval(pollOnce, interval);
+      toggleBtn.textContent = "Stop";
+    }
+
+    function stopPolling() {
+      if (!timerId) return;
+      clearInterval(timerId);
+      timerId = null;
+      setStatus("Stopped");
+      toggleBtn.textContent = "Start";
+    }
+
+    toggleBtn.addEventListener("click", () => {
+      if (timerId) {
+        stopPolling();
+      } else {
+        startPolling();
+      }
+    });
+  </script>
+</body>
+</html>
