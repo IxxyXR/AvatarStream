@@ -11,6 +11,7 @@ import logging
 import os
 import urllib.parse
 import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # UDP settings
 UDP_IP = "127.0.0.1"
@@ -70,6 +71,22 @@ POSE_SEGMENTS = {
     "shoulder_line": ("left_shoulder", "right_shoulder"),
     "hip_line": ("left_hip", "right_hip"),
 }
+
+
+class PoseState:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._payload = None
+        self._updated_ms = None
+
+    def set_payload(self, payload):
+        with self._lock:
+            self._payload = payload
+            self._updated_ms = int(time.time() * 1000)
+
+    def get_snapshot(self):
+        with self._lock:
+            return self._payload, self._updated_ms
 
 
 def setup_logging(log_file):
@@ -194,11 +211,15 @@ def build_parser():
     parser.add_argument("--select-camera", action="store_true", help="Interactively select camera index from a list, then start")
     parser.add_argument("--pick-camera", action="store_true", help="Alias for --select-camera")
     parser.add_argument("--log-file", default=DEFAULT_LOG_FILE, help="Path to log file")
-    parser.add_argument("--transport", choices=["http", "udp"], default="http", help="Pose output transport")
+    parser.add_argument("--transport", choices=["http", "udp", "none"], default="http", help="Pose output transport")
     parser.add_argument("--http-url", default=DEFAULT_HTTP_URL, help="HTTP endpoint URL")
     parser.add_argument("--http-method", choices=["get", "post"], default="get", help="HTTP method for pose upload")
     parser.add_argument("--http-query-param", default="data", help="Query parameter name used for JSON payload in GET mode")
     parser.add_argument("--http-timeout", type=float, default=0.2, help="HTTP timeout in seconds")
+    parser.add_argument("--listen-http", action="store_true", help="Run local HTTP listener that serves latest pose JSON")
+    parser.add_argument("--listen-host", default="127.0.0.1", help="Listener host for local HTTP server")
+    parser.add_argument("--listen-port", type=int, default=40074, help="Listener port for local HTTP server")
+    parser.add_argument("--listen-path", default="/pose", help="Listener endpoint path for pose JSON")
     return parser
 
 
@@ -358,11 +379,59 @@ def send_udp_pose(payload, sock):
     sock.sendto(message, (UDP_IP, UDP_PORT))
 
 
+def start_pose_http_listener(args, pose_state):
+    listen_path = args.listen_path if args.listen_path.startswith("/") else f"/{args.listen_path}"
+
+    class PoseHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            parsed = urllib.parse.urlsplit(self.path)
+            if parsed.path == "/health":
+                self._write_json(200, {"ok": True, "service": "holistic_tracker"})
+                return
+
+            if parsed.path != listen_path:
+                self._write_json(404, {"error": "Not Found", "path": parsed.path})
+                return
+
+            payload, updated_ms = pose_state.get_snapshot()
+            if payload is None:
+                self._write_json(503, {"error": "No pose data yet"})
+                return
+
+            self._write_json(
+                200,
+                {
+                    "ok": True,
+                    "updated_ms": updated_ms,
+                    "pose": payload,
+                },
+            )
+
+        def log_message(self, fmt, *values):
+            logger.info("HTTP listener: " + fmt, *values)
+
+        def _write_json(self, status_code, body):
+            blob = json.dumps(body, separators=(",", ":")).encode("utf-8")
+            self.send_response(status_code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(blob)))
+            self.end_headers()
+            self.wfile.write(blob)
+
+    server = ThreadingHTTPServer((args.listen_host, args.listen_port), PoseHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    logger.info("HTTP listener started on http://%s:%s%s", args.listen_host, args.listen_port, listen_path)
+    return server
+
+
 def main():
     args = build_parser().parse_args()
     setup_logging(args.log_file)
     logger.info("Logging to %s", os.path.abspath(args.log_file))
     cameras = list_available_cameras()
+    pose_state = PoseState()
+    pose_server = None
 
     if args.list_cameras:
         if not cameras:
@@ -380,6 +449,9 @@ def main():
         if selected is None:
             return
         camera_index = selected
+
+    if args.listen_http:
+        pose_server = start_pose_http_listener(args, pose_state)
 
     # Start Virtual Camera thread unless explicitly disabled for tracker-only debugging.
     if not args.no_virtual_cam:
@@ -406,8 +478,10 @@ def main():
             args.http_method.upper(),
             args.http_url,
         )
-    else:
+    elif args.transport == "udp":
         logger.info("Tracking started using camera index %s (%s), transport=udp %s:%s", camera_index, backend_name, UDP_IP, UDP_PORT)
+    else:
+        logger.info("Tracking started using camera index %s (%s), transport=none", camera_index, backend_name)
 
     try:
         while cap.isOpened():
@@ -426,13 +500,15 @@ def main():
 
             if results.pose_landmarks:
                 payload = build_pose_payload(results)
-                try:
-                    if args.transport == "http":
-                        send_http_pose(payload, args)
-                    else:
-                        send_udp_pose(payload, sock)
-                except Exception as e:
-                    logger.warning("Pose send failed: %s", e)
+                pose_state.set_payload(payload)
+                if args.transport != "none":
+                    try:
+                        if args.transport == "http":
+                            send_http_pose(payload, args)
+                        else:
+                            send_udp_pose(payload, sock)
+                    except Exception as e:
+                        logger.warning("Pose send failed: %s", e)
 
                 if args.debug:
                     now = time.time()
@@ -470,6 +546,10 @@ def main():
         cap.release()
         if sock is not None:
             sock.close()
+        if pose_server is not None:
+            pose_server.shutdown()
+            pose_server.server_close()
+            logger.info("HTTP listener stopped.")
 
 if __name__ == "__main__":
     main()
