@@ -2,8 +2,9 @@
 # You can install them using: pip install -r requirements.txt
 
 opencv-python
-mediapipe
+mediapipe==0.10.14
 pyvirtualcam
+pygrabber; platform_system == "Windows"
 pytest
 pytest-mock
 pyinstaller
