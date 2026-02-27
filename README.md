@@ -56,11 +56,43 @@ This script will:
     python run.py --godot-path /path/to/Godot_v4.x
     ```
 
+## Pose Listener Mode (No Godot)
+
+To run tracking with camera selection and local HTTP JSON output:
+
+* Windows:
+  ```bat
+  pickcam.bat
+  ```
+* Linux:
+  ```bash
+  ./pickcam.sh
+  ```
+* macOS (Terminal):
+  ```bash
+  ./pickcam.sh
+  ```
+* macOS (Finder double-click):
+  ```text
+  pickcam_mac.command
+  ```
+
+This starts the local listener at `127.0.0.1:40074` with:
+
+* Pose endpoint: `http://127.0.0.1:40074/pose`
+* Health endpoint: `http://127.0.0.1:40074/health`
+* Built-in viewer: `http://127.0.0.1:40074/viewer`
+
+Listener logs are written to:
+
+* `logs/holistic_tracker.log`
+
 ## Development
 
 *   **Python Scripts**: Located in `game/AvatarStream/scripts/python/`.
 *   **Godot Project**: Located in `game/AvatarStream/`.
 *   **Pose API Contract**: See [POSE_API.md](POSE_API.md) for the local HTTP listener JSON schema.
+*   **Browser Pose Viewer**: `game/AvatarStream/scripts/python/web/pose_viewer.html` (also served at `/viewer` by the listener).
 *   **Communication**:
     *   Python -> Godot: UDP Port 5005 (Pose Data, JSON)
     *   Godot -> Python: UDP Port 5006 (Video Frames, MJPEG)

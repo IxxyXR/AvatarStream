@@ -19,6 +19,9 @@ UDP_PORT = 5005
 VIRTUAL_CAM_PORT = 5006
 DEFAULT_LOG_FILE = os.path.join("logs", "holistic_tracker.log")
 DEFAULT_HTTP_URL = "http://127.0.0.1:40074/pose"
+DEFAULT_VIEWER_FILE = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "web", "pose_viewer.html")
+)
 logger = logging.getLogger("holistic_tracker")
 
 POSE_LANDMARK_NAMES = [
@@ -394,6 +397,18 @@ def start_pose_http_listener(args, pose_state):
             parsed = urllib.parse.urlsplit(self.path)
             if parsed.path == "/health":
                 self._write_json(200, {"ok": True, "service": "holistic_tracker"})
+                return
+            if parsed.path == "/viewer" or parsed.path == "/viewer.html":
+                if os.path.exists(DEFAULT_VIEWER_FILE):
+                    with open(DEFAULT_VIEWER_FILE, "rb") as f:
+                        html = f.read()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(html)))
+                    self.end_headers()
+                    self.wfile.write(html)
+                else:
+                    self._write_json(404, {"error": "Viewer file not found", "path": DEFAULT_VIEWER_FILE})
                 return
 
             if parsed.path != listen_path:
