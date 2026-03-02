@@ -8,7 +8,7 @@ Parameters = {
     bodyWidth = {label = "Body Width", type = "float", min = 0.1, max = 4, default = 1.6},
     bodyHeight = {label = "Body Height", type = "float", min = 0.1, max = 4, default = 2.2},
     bodyDepth = {label = "Body Depth", type = "float", min = 0.1, max = 4, default = 1.2},
-    minVisibility = {label = "Min Visibility", type = "float", min = 0, max = 1, default = 0.45},
+    minVisibility = {label = "Min Visibility", type = "float", min = 0, max = 1, default = 0.6},
     debugEveryFrames = {label = "Debug Every Frames", type = "int", min = 0, max = 600, default = 60}
 }
 
@@ -163,5 +163,6 @@ function Main()
     -- print("-----------------")
     return pointers
 end
+
 
 

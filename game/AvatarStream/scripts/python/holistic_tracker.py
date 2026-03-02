@@ -492,7 +492,7 @@ def main():
         vc_thread.start()
 
     mp_holistic = mp.solutions.holistic
-    holistic = mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+    holistic = mp_holistic.Holistic(min_detection_confidence=0.6, min_tracking_confidence=0.7)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) if args.transport == "udp" else None
     cap, backend_name = open_selected_camera(camera_index)
